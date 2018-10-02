@@ -1,0 +1,20 @@
+[etcd]
+redskull.stephenreaves.com
+[masters]
+redskull.stephenreaves.com
+[sslhost]
+redskull.stephenreaves.com # should be ansible host
+[node]
+redskull.stephenreaves.com
+hydra0.stephenreaves.com
+
+###################
+# Ansible Configs #
+###################
+
+ansible_user=root
+
+# Uncomment if user is not root
+#ansible_become=yes
+
+ansible_python_interpreter=/usr/bin/python3

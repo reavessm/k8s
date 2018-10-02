@@ -1,0 +1,65 @@
+---
+- name: Install Kubernetes packages
+  when: ansible_os_family == "RedHat"
+  yum:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+  with_items:
+    -  python-rhsm-certificates
+  register: masterpackage
+
+- name: create kubernetes config directory
+  file: path={{ manifest_config_dir }} state=directory
+  register: manifest
+
+- name: copy api config file
+  template: src="kube-apiserver.json.j2" dest={{ manifest_config_dir }}/kube-apiserver.json
+  register: api
+
+- name: copy controller config file
+  template: src="kube-controller-manager.json.j2" dest={{ manifest_config_dir }}/kube-controller-manager.json
+  register: controller
+
+- name: copy scheduler config file
+  template: src="kube-scheduler.json.j2" dest={{ manifest_config_dir }}/kube-scheduler.json
+  register: scheduler
+
+- name: copy kube config file
+  template: src="kubeadminconfig.j2" dest={{ kube_config_dir }}/kubeadminconfig
+  register: config
+
+- name: copy kubeconfig file to use with command line tool kubectl 
+  template: src="kubeconfig.j2" dest={{ kube_config_dir }}/kubeconfig
+
+- name: copy kubelet-config file
+  template: src="kubelet.j2" dest={{ kube_config_dir }}/kubelet
+  register: kubelet_conf
+
+- name: copy kubelet-service file
+  template: src="kubelet.service.j2" dest=/etc/systemd/system/kubelet.service owner=root group=root mode=0644
+  register: kubelet_service
+
+- name: copy auth file
+  template: src=auth.csv.j2 dest={{ kube_config_dir }}/auth.csv
+
+- name: copy policy.json file
+  copy: src=policy.json dest={{ kube_config_dir }}/policy.json     
+
+- name: copy kubectl binary and kubelet binary download script
+  copy: src=getkube.sh dest=/opt/getkube.sh
+
+- name: download k8s binary
+  shell: "sh /opt/getkube.sh {{ k8s_version }} BOTH"
+
+- name: create kubelet directory
+  file: path=/var/lib/kubelet state=directory
+  
+- name: start and enable kubelet
+  service: name=kubelet enabled=yes state=started daemon_reload=yes
+  register: kubelet_start
+
+- name: reload kubelet
+  when: openssl_cert|changed or kubelet_service|changed or kubelet_conf|changed
+  service: name=kubelet state=restarted
+
