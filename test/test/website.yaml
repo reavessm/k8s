@@ -1,0 +1,10 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: helloworld
+spec:
+  containers:
+    - name: myfrontend
+      image: karthequian/helloworld
+  securityContext:
+    runAsUser: 0

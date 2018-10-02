@@ -1,0 +1,17 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: website
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx:alpine
+      securityContext:
+        runAsUser: 0
+      volumeMounts:
+      - mountPath: "/usr/share/nginx/html"
+        name: webvol
+  volumes:
+    - name: webvol
+      persistentVolumeClaim:
+        claimName: webdata-claim
