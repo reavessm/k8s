@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: distcache
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: distcache-config
+  namespace: distcache
+data:
+  default.conf: |
+    server {
+      listen 192.168.0.1:3142
+
+      server_name distfiles.stephenreaves.com
+
+      access_log /var/log/nginx/distfiles.access_log main;
+      error_log /var/log/nginx/distfiles.error_log info;
+
+      location / {
+        proxy_cache distfiles;
+        proxy_cache_key "$request_filesname";
+        proxy_cache_lock on;
+        proxy_cache_lock_age 1m;
+        proxy_cache_valid 200 302 7d;
+        proxy_cache_valid 404     1h;
+        proxy_pass http://distfiles;
+      }
+    }
+
+    proxy_cache_path /mnt/leviathan/distcache levels=1:2
+      keys_zone=distfiles:5m
+      max_size=10g
+      inactive=7d
+      use_temp_path=off;
+
+    upstream distfiles {
+      server mirror1;
+      server mirror2;
+    }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: distcache-data
+spec:
+  capacity:
+    storage: 15 Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.0.5 # Leviathan
+    path: "/mnt/DataVolume/Documents/VMs/Distcache"
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metatdata:
+  name: distcache-deployment
+  namespace: distcache
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: distcache
+      spec:
+        containers:
+        - image: nginx:1.13.6-alpine
+          imagePullPolicy: Always
+          name: distcache
+          ports:
+          - containerPort: 3142
+          volumeMounts:
+          - name: distcache-configs
+            mountPath: /etc/nginx/conf.d
+          - name: distcache-data
+            mountPath: /usr/portage
+      volumes:
+        - name: distcache-configs
+          configMap:
+            name: distcache-config
+        - name: distcache-data
+          persistenVolumeClaim:
+            claimName: distcache-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: distcache-service
+  namespace: distcache
+spec:
+  ports:
+  - port: 3142
+    targetPort: 3142
+    protocol: TCP
+  selector:
+    app: distcache
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: distcache-ingress
+  namespace: distcache
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    kubernetes.io/ingress.class: "nginx"
+  spec:
+    tls:
+    - hosts:
+      - distfiles.stephenreaves.com
+      secretName: distcache-tls
+    rules:
+      - host: distfiles.stephenreaves.com
+        http:
+          paths:
+            - path: /
+              backend:
+                serviceName: distcache-service
+                servicePort: 3142
